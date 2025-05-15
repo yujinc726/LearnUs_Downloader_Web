@@ -5,7 +5,6 @@ from bs4 import BeautifulSoup
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
 from ffmpeg_progress_yield import FfmpegProgress
-from subprocess import CREATE_NO_WINDOW
 from typing import Tuple, Callable
 
 # ------------------------
@@ -166,8 +165,10 @@ def extract_from_html(html_content: str):
 # ------------------------
 
 def _ffmpeg_default_flags():
-    """Return platform-specific kwargs for subprocess."""
+    """Return platform-specific kwargs for subprocess (hide console on Windows)."""
     if sys.platform.startswith('win'):
+        # CREATE_NO_WINDOW is only available on Windows platforms
+        from subprocess import CREATE_NO_WINDOW  # type: ignore
         return {"creationflags": CREATE_NO_WINDOW}
     return {}
 
