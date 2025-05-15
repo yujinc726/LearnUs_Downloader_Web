@@ -5,37 +5,13 @@ from bs4 import BeautifulSoup
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
 from ffmpeg_progress_yield import FfmpegProgress
-from typing import Tuple, Callable, Optional
-import imageio_ffmpeg
-
-# Cache for the resolved ffmpeg binary path obtained via imageio_ffmpeg.
-_FFMPEG_PATH_CACHE: Optional[str] = None
-
-
-def _get_ffmpeg_path() -> str:
-    """Return a path to a working ffmpeg executable.
-
-    The function prefers the platform-specific static binary provided by
-    the `imageio-ffmpeg` package. If that fails for any reason, it falls
-    back to the plain string ``"ffmpeg"`` which will rely on the system-
-    installed binary being discoverable via ``$PATH``.
-    """
-    global _FFMPEG_PATH_CACHE
-
-    if _FFMPEG_PATH_CACHE is None:
-        try:
-            _FFMPEG_PATH_CACHE = imageio_ffmpeg.get_ffmpeg_exe()
-        except Exception:
-            # As a last resort, hope that a system ffmpeg exists.
-            _FFMPEG_PATH_CACHE = "ffmpeg"
-    return _FFMPEG_PATH_CACHE
-
+from typing import Tuple, Callable
 
 # ------------------------
 # Core extraction helpers
 # ------------------------
 
-def extract_from_login(username: str, password: str, url: str) -> Tuple[Optional[str], Optional[str]]:
+def extract_from_login(username: str, password: str, url: str) -> Tuple[str | None, str | None]:
     """Login to LearnUs and return (video_title, m3u8_url).
     Returns (None, None) if login or extraction fails."""
     session = requests.Session()
@@ -188,26 +164,27 @@ def extract_from_html(html_content: str):
 # Download utilities
 # ------------------------
 
-def _ffmpeg_default_flags():
-    """Return platform-specific kwargs for subprocess (hide console on Windows)."""
-    if sys.platform.startswith('win'):
-        # CREATE_NO_WINDOW is only available on Windows platforms
-        from subprocess import CREATE_NO_WINDOW  # type: ignore
-        return {"creationflags": CREATE_NO_WINDOW}
+def _ffmpeg_default_flags() -> dict:
+    """Return extra kwargs for subprocess.Popen to hide the console on Windows.
+
+    On non-Windows platforms this simply returns an empty dict, avoiding any
+    unconditional import of Windows-only symbols (which some static linters
+    dislike). It keeps the behavior identical while removing hard-coded
+    platform branches elsewhere in the code.
+    """
+    if os.name == "nt":
+        import subprocess  # local import to avoid unnecessary dependency on non-Windows
+
+        # `CREATE_NO_WINDOW` prevents a new console window from popping up when
+        # ffmpeg is executed.  Fallback to 0x08000000 (its value) if the
+        # constant is omitted in future Python versions.
+        create_no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        return {"creationflags": create_no_window}
+
     return {}
 
 
-# Type for a path-like string.
-# (We avoid importing `os.PathLike` for simplicity.)
-
-
-def download_mp4(
-    m3u8_url: str,
-    video_title: str,
-    download_folder: str,
-    ffmpeg_path: Optional[str] = None,
-    progress_cb: Optional[Callable[[str, int], None]] = None,
-) -> str:
+def download_mp4(m3u8_url: str, video_title: str, download_folder: str, ffmpeg_path: str = 'ffmpeg', progress_cb: Callable[[str, int], None] | None = None) -> str:
     """Download video to MP4 and return the output file path."""
     mp4_file = f"{video_title}.mp4"
     mp4_path = os.path.join(download_folder, mp4_file)
@@ -215,9 +192,7 @@ def download_mp4(
     if not os.path.exists(download_folder):
         os.makedirs(download_folder)
 
-    ffmpeg_exe = ffmpeg_path or _get_ffmpeg_path()
-
-    cmd = [ffmpeg_exe, '-y', '-i', m3u8_url, '-bsf:a', 'aac_adtstoasc', '-c', 'copy', mp4_path]
+    cmd = [ffmpeg_path, '-y', '-i', m3u8_url, '-bsf:a', 'aac_adtstoasc', '-c', 'copy', mp4_path]
     ff = FfmpegProgress(cmd)
     for progress in ff.run_command_with_progress(popen_kwargs=_ffmpeg_default_flags()):
         if progress_cb:
@@ -225,13 +200,7 @@ def download_mp4(
     return mp4_path
 
 
-def download_mp3(
-    m3u8_url: str,
-    video_title: str,
-    download_folder: str,
-    ffmpeg_path: Optional[str] = None,
-    progress_cb: Optional[Callable[[str, int], None]] = None,
-) -> str:
+def download_mp3(m3u8_url: str, video_title: str, download_folder: str, ffmpeg_path: str = 'ffmpeg', progress_cb: Callable[[str, int], None] | None = None) -> str:
     """Download audio only to MP3 and return the output file path."""
     mp3_file = f"{video_title}.mp3"
     mp3_path = os.path.join(download_folder, mp3_file)
@@ -239,9 +208,7 @@ def download_mp3(
     if not os.path.exists(download_folder):
         os.makedirs(download_folder)
 
-    ffmpeg_exe = ffmpeg_path or _get_ffmpeg_path()
-
-    cmd = [ffmpeg_exe, '-y', '-i', m3u8_url, '-vn', '-acodec', 'libmp3lame', mp3_path]
+    cmd = [ffmpeg_path, '-y', '-i', m3u8_url, '-vn', '-acodec', 'libmp3lame', mp3_path]
     ff = FfmpegProgress(cmd)
     for progress in ff.run_command_with_progress(popen_kwargs=_ffmpeg_default_flags()):
         if progress_cb:
