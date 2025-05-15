@@ -2,7 +2,7 @@ from __future__ import annotations
 import threading
 import uuid
 import os
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from learnus_core import (
     extract_from_login,
@@ -18,7 +18,7 @@ class DownloadTask:
         self.status: str = 'pending'  # pending, running, finished, failed
         self.progress: Dict[str, int] = {}
         self.files: List[str] = []
-        self.error: str | None = None
+        self.error: Optional[str] = None
 
     def to_dict(self):
         return {
@@ -39,7 +39,7 @@ def _register_task(task: DownloadTask):
         tasks[task.id] = task
 
 
-def get_task(task_id: str) -> DownloadTask | None:
+def get_task(task_id: str) -> Optional[DownloadTask]:
     with _tasks_lock:
         return tasks.get(task_id)
 

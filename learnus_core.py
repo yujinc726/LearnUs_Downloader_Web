@@ -5,13 +5,13 @@ from bs4 import BeautifulSoup
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
 from ffmpeg_progress_yield import FfmpegProgress
-from typing import Tuple, Callable
+from typing import Tuple, Callable, Optional
 
 # ------------------------
 # Core extraction helpers
 # ------------------------
 
-def extract_from_login(username: str, password: str, url: str) -> Tuple[str | None, str | None]:
+def extract_from_login(username: str, password: str, url: str) -> Tuple[Optional[str], Optional[str]]:
     """Login to LearnUs and return (video_title, m3u8_url).
     Returns (None, None) if login or extraction fails."""
     session = requests.Session()
@@ -173,7 +173,7 @@ def _ffmpeg_default_flags():
     return {}
 
 
-def download_mp4(m3u8_url: str, video_title: str, download_folder: str, ffmpeg_path: str = 'ffmpeg', progress_cb: Callable[[str, int], None] | None = None) -> str:
+def download_mp4(m3u8_url: str, video_title: str, download_folder: str, ffmpeg_path: str = 'ffmpeg', progress_cb: Optional[Callable[[str, int], None]] = None) -> str:
     """Download video to MP4 and return the output file path."""
     mp4_file = f"{video_title}.mp4"
     mp4_path = os.path.join(download_folder, mp4_file)
@@ -189,7 +189,7 @@ def download_mp4(m3u8_url: str, video_title: str, download_folder: str, ffmpeg_p
     return mp4_path
 
 
-def download_mp3(m3u8_url: str, video_title: str, download_folder: str, ffmpeg_path: str = 'ffmpeg', progress_cb: Callable[[str, int], None] | None = None) -> str:
+def download_mp3(m3u8_url: str, video_title: str, download_folder: str, ffmpeg_path: str = 'ffmpeg', progress_cb: Optional[Callable[[str, int], None]] = None) -> str:
     """Download audio only to MP3 and return the output file path."""
     mp3_file = f"{video_title}.mp3"
     mp3_path = os.path.join(download_folder, mp3_file)
