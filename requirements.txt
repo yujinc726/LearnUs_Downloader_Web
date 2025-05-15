@@ -4,4 +4,5 @@ requests==2.31.0
 pycryptodome==3.19.1
 ffmpeg-progress-yield
 packaging==23.1
+imageio-ffmpeg==0.4.8
 gunicorn==21.2.0 
