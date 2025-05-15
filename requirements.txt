@@ -1,0 +1,7 @@
+Flask==2.2.5
+beautifulsoup4==4.12.2
+requests==2.31.0
+pycryptodome==3.19.1
+ffmpeg-progress-yield
+packaging==23.1
+gunicorn==21.2.0 
