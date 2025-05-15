@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, send_from_directory, current_app, abort
+from flask import Blueprint, request, jsonify, send_from_directory, current_app, abort, after_this_request
 import os
 
 from app.tasks import (
@@ -57,5 +57,21 @@ def download_file(task_id, filename):
 
     for path in task.files:
         if os.path.basename(path) == filename:
+
+            @after_this_request
+            def remove_file(response):
+                """Delete the file (and its directory if empty) after it has been sent."""
+                try:
+                    os.remove(path)
+                    dir_path = os.path.dirname(path)
+                    # Remove directory if it became empty (ignores errors if not empty or fails)
+                    if not os.listdir(dir_path):
+                        os.rmdir(dir_path)
+                except Exception:
+                    # Best-effort cleanup; ignore any failure.
+                    pass
+                return response
+
             return send_from_directory(os.path.dirname(path), filename, as_attachment=True)
+
     abort(404) 
