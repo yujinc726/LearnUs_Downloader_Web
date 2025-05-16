@@ -388,7 +388,7 @@ async def guest_download(
             span.decompose()
         extracted = h1.get_text(strip=True)
         if extracted:
-            invalid_chars = '\/:*?"<>|'
+            invalid_chars = "\\/:*?\"<>|"
             title = extracted.translate(str.maketrans(invalid_chars, '＼／：＊？＂＜＞｜'))
 
     # Probe duration/bitrate using ffprobe if available (reuse logic above)
