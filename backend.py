@@ -251,7 +251,11 @@ def download_video(video_id: int, ext: str, client: LearnUsClient = Depends(get_
     else:  # mp3
         codec_args = "-vn -c:a libmp3lame -b:a 192k -f mp3"
 
-    cmd = f"{shlex.quote(ffmpeg_bin)} -loglevel error -y -i {shlex.quote(m3u8_url)} {codec_args} pipe:1"
+    # Add necessary headers for LearnUs (Referer + Cookie)
+    cookie_header = "; ".join([f"{k}={v}" for k, v in client.session.cookies.get_dict().items()])
+    headers_opt = f"-headers 'Referer: {video_page_url}\\r\\nCookie: {cookie_header}\\r\\n'"
+
+    cmd = f"{shlex.quote(ffmpeg_bin)} -loglevel error -y {headers_opt} -i {shlex.quote(m3u8_url)} {codec_args} pipe:1"
 
     # Spawn subprocess
     process = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -261,15 +265,20 @@ def download_video(video_id: int, ext: str, client: LearnUsClient = Depends(get_
 
     # Streaming generator
     def iterfile():
+        sent_any = False
         try:
             while True:
-                chunk = process.stdout.read(1024 * 1024)  # 1MB
+                chunk = process.stdout.read(1024 * 1024)
                 if not chunk:
                     break
+                sent_any = True
                 yield chunk
         finally:
             process.stdout.close()
             process.kill()
+        if process.returncode != 0 or not sent_any:
+            err = process.stderr.read().decode(errors="ignore")
+            raise HTTPException(status_code=500, detail=f"ffmpeg failed: {err.strip() or 'no output'}")
 
     filename = f"{title}.{ext}"
     headers = {
