@@ -285,8 +285,8 @@
         li.className='list-group-item d-flex justify-content-between align-items-center flex-wrap';
         const titleSpan=document.createElement('span'); titleSpan.textContent=v.title; li.appendChild(titleSpan);
         const btnGroup=document.createElement('div'); btnGroup.className='btn-group btn-group-sm';
-        const mp4Btn=document.createElement('button'); mp4Btn.className='btn btn-outline-primary btn-sm download-btn'; mp4Btn.innerHTML='<i class="fa-solid fa-download"></i> MP4'; mp4Btn.addEventListener('click',()=>download(v.id,'mp4',v.title,li));
-        const mp3Btn=document.createElement('button'); mp3Btn.className='btn btn-outline-secondary btn-sm download-btn'; mp3Btn.innerHTML='<i class="fa-solid fa-music"></i> MP3'; mp3Btn.addEventListener('click',()=>download(v.id,'mp3',v.title,li));
+        const mp4Btn=document.createElement('button'); mp4Btn.className='btn btn-outline-primary btn-sm download-btn'; mp4Btn.innerHTML='<i class="fa-solid fa-download"></i> MP4'; mp4Btn.addEventListener('click',(e)=>download(v.id,'mp4',v.title,li,e));
+        const mp3Btn=document.createElement('button'); mp3Btn.className='btn btn-outline-secondary btn-sm download-btn'; mp3Btn.innerHTML='<i class="fa-solid fa-music"></i> MP3'; mp3Btn.addEventListener('click',(e)=>download(v.id,'mp3',v.title,li,e));
         btnGroup.appendChild(mp4Btn); btnGroup.appendChild(mp3Btn);
         li.appendChild(btnGroup);
         videoList.appendChild(li);
@@ -294,49 +294,53 @@
       videoSection.classList.remove('d-none');
     }
 
-    async function download(id,ext,title,li){
-      // progress bar
-      const progWrapper=document.createElement('div');
-      progWrapper.className='progress w-100 video-progress';
+    async function download(id,ext,title,li,e){
+      if(e) e.preventDefault();
+      // Progress bar wrapper
+      const wrapper=document.createElement('div');
+      wrapper.className='progress video-progress';
       const bar=document.createElement('div');
       bar.className='progress-bar';
       bar.style.width='0%';
-      progWrapper.appendChild(bar);
-      li.appendChild(progWrapper);
+      wrapper.appendChild(bar);
+      li.appendChild(wrapper);
 
       try{
-        showLoading(true);
-        const res=await api(`/download/${id}.${ext}`);
-        const reader=res.body.getReader();
-        const contentLength = +res.headers.get('Content-Length') || 0;
-        let received=0;
-        const chunks=[];
-        while(true){
-          const {done,value}=await reader.read();
-          if(done) break;
-          chunks.push(value);
-          received+=value.length;
-          if(contentLength){
-            const percent=((received/contentLength)*100).toFixed(0);
-            bar.style.width=percent+'%';
-          }else{
-            // indeterminate style
-            bar.classList.add('progress-bar-striped','progress-bar-animated');
+        const opts={headers:{'X-Auth-Token':token}};
+        const res=await fetch(`/download/${id}.${ext}`,opts);
+        if(res.status===401) throw new Error('세션 만료, 다시 로그인하세요');
+        if(!res.ok) throw new Error('다운로드 실패');
+
+        let blob;
+        if(res.body && res.body.getReader){
+          const reader=res.body.getReader();
+          const total=+res.headers.get('Content-Length')||0;
+          let rec=0,chunks=[];
+          while(true){
+            const {done,value}=await reader.read();
+            if(done) break;
+            chunks.push(value); rec+=value.length;
+            if(total) bar.style.width=((rec/total)*100).toFixed(0)+'%';
+            else bar.classList.add('progress-bar-striped','progress-bar-animated');
           }
+          blob=new Blob(chunks,{type:ext==='mp4'?'video/mp4':'audio/mpeg'});
+        }else{
+          bar.classList.add('progress-bar-striped','progress-bar-animated');
+          blob=await res.blob();
+          bar.style.width='100%';
         }
-        const blob=new Blob(chunks,{type: ext==='mp4'?'video/mp4':'audio/mpeg'});
+
+        if(!blob.size) throw new Error('빈 데이터 수신');
+
         const url=URL.createObjectURL(blob);
         const a=document.createElement('a');
         a.href=url; a.download=`${title}.${ext}`;
-        document.body.appendChild(a);
-        a.click();
+        document.body.appendChild(a); a.click(); a.remove();
         setTimeout(()=>URL.revokeObjectURL(url),30000);
-        a.remove();
       }catch(err){
         alert(err.message);
       }finally{
-        progWrapper.remove();
-        showLoading(false);
+        wrapper.remove();
       }
     }
 
