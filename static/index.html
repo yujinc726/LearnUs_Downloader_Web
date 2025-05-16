@@ -202,7 +202,7 @@
   <!-- Course selector (added) -->
   <div id="course-section" class="d-none mb-4">
     <div class="input-group">
-      <span class="input-group-text"><i class="fa-solid fa-book-open me-1"></i> 과목 선택</span>
+      <span class="input-group-text"><i class="fa-solid fa-book-open me-1"></i> 강의 선택</span>
       <select id="course-select" class="form-select"></select>
     </div>
   </div>
@@ -291,11 +291,27 @@
     async function loadCourses(){
       const courses=await (await api('/courses')).json();
       courseSelect.innerHTML='';
-      courses.forEach(c=>{ const o=document.createElement('option'); o.value=c.id; o.textContent=c.name; courseSelect.appendChild(o); });
-      if(courses.length){ courseSection.classList.remove('d-none'); loadVideos(courses[0].id); }
+      // Placeholder option
+      const placeholder=document.createElement('option');
+      placeholder.textContent='강의를 선택해주세요';
+      placeholder.disabled=true;
+      placeholder.selected=true;
+      placeholder.value='';
+      courseSelect.appendChild(placeholder);
+
+      courses.forEach(c=>{
+        const o=document.createElement('option');
+        o.value=c.id; o.textContent=c.name; courseSelect.appendChild(o);
+      });
+
+      if(courses.length){ courseSection.classList.remove('d-none'); }
     }
 
-    courseSelect.addEventListener('change',()=> loadVideos(courseSelect.value));
+    courseSelect.addEventListener('change',()=>{
+      if(courseSelect.value){
+        loadVideos(courseSelect.value);
+      }
+    });
 
     async function loadVideos(courseId){
       const {videos}=await (await api(`/videos?course_id=${courseId}`)).json();
