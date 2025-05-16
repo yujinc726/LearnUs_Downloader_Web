@@ -88,11 +88,17 @@
       margin: 0 auto;
     }
 
+    /* Course selector card style */
     #course-section {
-      background: #fff;
-      border-radius: 1rem;
-      padding: 1.5rem;
-      box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.05);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    #course-section .input-group-text {
+      background: linear-gradient(90deg,var(--primary-gradient-start),var(--primary-gradient-end));
+      color:#fff;
+      font-weight:600;
+      border:none;
     }
 
     /* video list wrapper spacing */
@@ -167,6 +173,12 @@
       align-items: center;
       gap: 4px;
     }
+
+    .video-progress {
+      width: 100%;
+      height: 6px;
+      margin-top: 6px;
+    }
   </style>
 </head>
 <body class="py-4">
@@ -184,7 +196,7 @@
   </form>
 
   <!-- Course selector (added) -->
-  <div id="course-section" class="d-none mb-4" style="max-width:600px;margin:0 auto;">
+  <div id="course-section" class="d-none mb-4">
     <h4 class="mb-2">과목 선택</h4>
     <select id="course-select" class="form-select"></select>
   </div>
@@ -256,8 +268,8 @@
         li.className='list-group-item d-flex justify-content-between align-items-center flex-wrap';
         const titleSpan=document.createElement('span'); titleSpan.textContent=v.title; li.appendChild(titleSpan);
         const btnGroup=document.createElement('div'); btnGroup.className='btn-group btn-group-sm';
-        const mp4Btn=document.createElement('button'); mp4Btn.className='btn btn-outline-primary btn-sm download-btn'; mp4Btn.innerHTML='<i class="fa-solid fa-download"></i> MP4'; mp4Btn.addEventListener('click',()=>download(v.id,'mp4',v.title));
-        const mp3Btn=document.createElement('button'); mp3Btn.className='btn btn-outline-secondary btn-sm download-btn'; mp3Btn.innerHTML='<i class="fa-solid fa-music"></i> MP3'; mp3Btn.addEventListener('click',()=>download(v.id,'mp3',v.title));
+        const mp4Btn=document.createElement('button'); mp4Btn.className='btn btn-outline-primary btn-sm download-btn'; mp4Btn.innerHTML='<i class="fa-solid fa-download"></i> MP4'; mp4Btn.addEventListener('click',()=>download(v.id,'mp4',v.title,li));
+        const mp3Btn=document.createElement('button'); mp3Btn.className='btn btn-outline-secondary btn-sm download-btn'; mp3Btn.innerHTML='<i class="fa-solid fa-music"></i> MP3'; mp3Btn.addEventListener('click',()=>download(v.id,'mp3',v.title,li));
         btnGroup.appendChild(mp4Btn); btnGroup.appendChild(mp3Btn);
         li.appendChild(btnGroup);
         videoList.appendChild(li);
@@ -265,13 +277,27 @@
       videoSection.classList.remove('d-none');
     }
 
-    async function download(id,ext,title){
+    async function download(id,ext,title,li){
+      // show indeterminate progress bar
+      const progWrapper=document.createElement('div');
+      progWrapper.className='progress w-100 video-progress';
+      progWrapper.innerHTML='<div class="progress-bar progress-bar-striped progress-bar-animated" style="width:100%"></div>';
+      li.appendChild(progWrapper);
+
       try{
         showLoading(true);
         const blob=await (await api(`/download/${id}.${ext}`)).blob();
         const url=URL.createObjectURL(blob);
-        const a=document.createElement('a'); a.href=url; a.download=`${title}.${ext}`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-      }catch(err){ alert(err.message); } finally{ showLoading(false); }
+        const a=document.createElement('a');
+        a.href=url; a.download=`${title}.${ext}`;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+      }catch(err){
+        alert(err.message);
+      } finally {
+        showLoading(false);
+        progWrapper.remove();
+      }
     }
 
     logoutBtn.addEventListener('click',async()=>{ try{await api('/logout',{method:'POST'});}catch{} location.reload(); });
