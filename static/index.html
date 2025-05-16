@@ -353,6 +353,12 @@
         const chunks = [];
         let received = 0;
 
+        if (!total) {
+          // Unknown size: show animated full-length bar immediately
+          progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
+          progressBar.style.width = '100%';
+        }
+
         if (reader) {
           while (true) {
             const { done, value } = await reader.read();
@@ -360,19 +366,14 @@
             chunks.push(value);
             received += value.length;
 
-            // Update progress bar when we know total size
             if (total) {
               const pct = ((received / total) * 100).toFixed(1);
               progressBar.style.width = `${pct}%`;
-            } else {
-              progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
             }
           }
         } else {
           // Fallback: not stream-capable browser
-          progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
           chunks.push(new Uint8Array(await res.arrayBuffer()));
-          progressBar.style.width = '100%';
         }
 
         const blob = new Blob(chunks, {
