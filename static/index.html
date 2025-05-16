@@ -307,61 +307,99 @@
       videoSection.classList.remove('d-none');
     }
 
-    async function download(id,ext,title,li,btn){
-      // Prevent duplicate clicks on the same button
-      if(btn && btn.dataset.downloading) return;
-      if(btn){
-        btn.dataset.downloading = '1';
-        btn.disabled = true;
+    // Completely rewritten download routine
+    async function download(id, ext, title, li, btn) {
+      // Guard: ignore if a download on this button is already running
+      if (btn && btn.dataset.downloading === '1') {
+        return;
       }
-      // Progress bar wrapper
-      const wrapper=document.createElement('div');
-      wrapper.className='progress video-progress';
-      const bar=document.createElement('div');
-      bar.className='progress-bar';
-      bar.style.width='0%';
-      wrapper.appendChild(bar);
-      li.appendChild(wrapper);
 
-      try{
-        const opts={headers:{'X-Auth-Token':token}};
-        const res=await fetch(`/download/${id}.${ext}`,opts);
-        if(res.status===401) throw new Error('세션 만료, 다시 로그인하세요');
-        if(!res.ok) throw new Error('다운로드 실패');
+      // Mark button as busy (visual + logical)
+      if (btn) {
+        btn.dataset.downloading = '1';
+        btn.classList.add('disabled');
+      }
 
-        let blob;
-        if(res.body && res.body.getReader){
-          const reader=res.body.getReader();
-          const total=+res.headers.get('Content-Length')||0;
-          let rec=0,chunks=[];
-          while(true){
-            const {done,value}=await reader.read();
-            if(done) break;
-            chunks.push(value); rec+=value.length;
-            if(total) bar.style.width=((rec/total)*100).toFixed(0)+'%';
-            else bar.classList.add('progress-bar-striped','progress-bar-animated');
-          }
-          blob=new Blob(chunks,{type:ext==='mp4'?'video/mp4':'audio/mpeg'});
-        }else{
-          bar.classList.add('progress-bar-striped','progress-bar-animated');
-          blob=await res.blob();
-          bar.style.width='100%';
+      // Create progress bar UI
+      const progressWrapper = document.createElement('div');
+      progressWrapper.className = 'progress video-progress';
+      const progressBar = document.createElement('div');
+      progressBar.className = 'progress-bar';
+      progressBar.style.width = '0%';
+      progressWrapper.appendChild(progressBar);
+      li.appendChild(progressWrapper);
+
+      try {
+        // Kick off download request
+        const res = await fetch(`/download/${id}.${ext}`, {
+          headers: {
+            'X-Auth-Token': token,
+          },
+          cache: 'no-store',
+        });
+
+        if (res.status === 401) {
+          throw new Error('세션 만료: 다시 로그인해 주세요.');
+        }
+        if (!res.ok) {
+          throw new Error('다운로드 요청 실패');
         }
 
-        if(!blob.size) throw new Error('빈 데이터 수신');
+        // Try to obtain total size for progress feedback
+        const total = Number(res.headers.get('Content-Length')) || 0;
 
-        const url=URL.createObjectURL(blob);
-        const a=document.createElement('a');
-        a.href=url; a.download=`${title}.${ext}`;
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(()=>URL.revokeObjectURL(url),30000);
-      }catch(err){
-        alert(err.message);
-      }finally{
-        wrapper.remove();
-        if(btn){
+        // Stream reader (supported browsers)
+        const reader = res.body?.getReader();
+        const chunks = [];
+        let received = 0;
+
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            received += value.length;
+
+            // Update progress bar when we know total size
+            if (total) {
+              const pct = ((received / total) * 100).toFixed(1);
+              progressBar.style.width = `${pct}%`;
+            } else {
+              progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
+            }
+          }
+        } else {
+          // Fallback: not stream-capable browser
+          progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
+          chunks.push(new Uint8Array(await res.arrayBuffer()));
+          progressBar.style.width = '100%';
+        }
+
+        const blob = new Blob(chunks, {
+          type: ext === 'mp4' ? 'video/mp4' : 'audio/mpeg',
+        });
+
+        if (!blob.size) {
+          throw new Error('0바이트 파일이 수신되었습니다.');
+        }
+
+        // Trigger file save (single click)
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `${title}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        // Cleanup after some time
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+      } catch (err) {
+        alert(err?.message || err || '알 수 없는 오류');
+      } finally {
+        progressWrapper.remove();
+        if (btn) {
           delete btn.dataset.downloading;
-          btn.disabled = false;
+          btn.classList.remove('disabled');
         }
       }
     }
