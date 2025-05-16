@@ -295,48 +295,25 @@
     }
 
     async function download(id,ext,title,li){
-      // progress bar
+      // show indeterminate progress bar
       const progWrapper=document.createElement('div');
       progWrapper.className='progress w-100 video-progress';
-      const bar=document.createElement('div');
-      bar.className='progress-bar';
-      bar.style.width='0%';
-      progWrapper.appendChild(bar);
+      progWrapper.innerHTML='<div class="progress-bar progress-bar-striped progress-bar-animated" style="width:100%"></div>';
       li.appendChild(progWrapper);
 
       try{
         showLoading(true);
-        const res=await api(`/download/${id}.${ext}`);
-        const reader=res.body.getReader();
-        const contentLength = +res.headers.get('Content-Length') || 0;
-        let received=0;
-        const chunks=[];
-        while(true){
-          const {done,value}=await reader.read();
-          if(done) break;
-          chunks.push(value);
-          received+=value.length;
-          if(contentLength){
-            const percent=((received/contentLength)*100).toFixed(0);
-            bar.style.width=percent+'%';
-          }else{
-            // indeterminate style
-            bar.classList.add('progress-bar-striped','progress-bar-animated');
-          }
-        }
-        const blob=new Blob(chunks,{type: ext==='mp4'?'video/mp4':'audio/mpeg'});
+        const blob=await (await api(`/download/${id}.${ext}`)).blob();
         const url=URL.createObjectURL(blob);
         const a=document.createElement('a');
         a.href=url; a.download=`${title}.${ext}`;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(()=>URL.revokeObjectURL(url),30000);
-        a.remove();
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
       }catch(err){
         alert(err.message);
-      }finally{
-        progWrapper.remove();
+      } finally {
         showLoading(false);
+        progWrapper.remove();
       }
     }
 
