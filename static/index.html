@@ -320,19 +320,16 @@
         btn.classList.add('disabled');
       }
 
-      // Create progress bar UI
-      const progressWrapper = document.createElement('div');
-      progressWrapper.className = 'progress video-progress';
+      // Show spinner on the clicked button to indicate download in progress
+      let originalHTML = '';
+      if (btn) {
+        originalHTML = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+      }
 
-      const progressBar = document.createElement('div');
-      progressBar.className = 'progress-bar';
-      progressBar.setAttribute('role', 'progressbar');
-      progressBar.style.width = '0%';
-      progressBar.style.transition = 'width 0.2s ease';
-      progressBar.textContent = '0%';
-
-      progressWrapper.appendChild(progressBar);
-      li.appendChild(progressWrapper);
+      // Stub progress objects to keep rest of logic intact without errors
+      const progressWrapper = { remove: () => {} };
+      const progressBar = { classList: { add: () => {}, remove: () => {} }, style: { width: '' }, textContent: '' };
 
       try {
         // Kick off download request
@@ -424,6 +421,9 @@
         if (btn) {
           delete btn.dataset.downloading;
           btn.classList.remove('disabled');
+          if (originalHTML) {
+            btn.innerHTML = originalHTML;
+          }
         }
       }
     }
