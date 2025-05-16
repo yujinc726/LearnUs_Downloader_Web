@@ -365,16 +365,31 @@ async def guest_download(
     except Exception:
         raise HTTPException(status_code=400, detail="파일을 읽는 중 오류가 발생했습니다.")
 
-    # Extract first .m3u8 URL
-    m = re.search(r"https?://[^'\"\s>]+\.m3u8", html_text)
-    if not m:
-        raise HTTPException(status_code=400, detail="HTML 내에서 m3u8 URL을 찾을 수 없습니다.")
+    # ------------------------------------------------------------------
+    # Parse HTML to obtain m3u8 URL & title (mirror get_video_stream_info)
+    # ------------------------------------------------------------------
+    from bs4 import BeautifulSoup
 
-    m3u8_url = m.group(0)
+    soup = BeautifulSoup(html_text, "html.parser")
 
-    # Determine title (fallback to uploaded filename)
-    title_match = re.search(r"<title>(.*?)</title>", html_text, flags=re.IGNORECASE | re.DOTALL)
-    title = title_match.group(1).strip() if title_match else file.filename.rsplit(".", 1)[0]
+    # Find m3u8 source tag
+    source_tag = soup.find("source", {"type": "application/x-mpegURL"})
+    if source_tag is None or not source_tag.get("src"):
+        raise HTTPException(status_code=400, detail="HTML 내에서 m3u8 <source> 태그를 찾을 수 없습니다.")
+
+    m3u8_url: str = source_tag["src"]
+
+    # Extract and sanitise title
+    title = file.filename.rsplit(".", 1)[0]
+    header_div = soup.find("div", id="vod_header")
+    if header_div is not None and header_div.find("h1") is not None:
+        h1 = header_div.find("h1")
+        for span in h1.find_all("span"):
+            span.decompose()
+        extracted = h1.get_text(strip=True)
+        if extracted:
+            invalid_chars = '\\\/:*?"<>|'
+            title = extracted.translate(str.maketrans(invalid_chars, "＼／：＊？＂＜＞｜"))
 
     # Probe duration/bitrate using ffprobe if available (reuse logic above)
     ffprobe_bin = os.getenv("FFPROBE_PATH") or shutil.which("ffprobe") or shutil.which("ffprobe.exe")
