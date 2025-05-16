@@ -4,7 +4,7 @@ import uuid
 from typing import Dict, List, Optional, Tuple
 import re
 
-from fastapi import FastAPI, HTTPException, Depends, Header, status
+from fastapi import FastAPI, HTTPException, Depends, Header, status, UploadFile, File, Query
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -13,8 +13,8 @@ from learnus_client import LearnUsClient, LearnUsLoginError
 
 app = FastAPI(title="LearnUs Calendar API")
 
-# In-memory session store {token: LearnUsClient}
-_SESSIONS: Dict[str, LearnUsClient] = {}
+# Session store now may contain either a LearnUsClient (for normal users) or None (for guest users).
+_SESSIONS: Dict[str, Optional[LearnUsClient]] = {}
 
 # Course cache {client_id: {course_id: (last_access_time, activities)}}
 _COURSE_CACHE: Dict[int, Dict[int, Tuple[float, List]]] = {}
@@ -27,6 +27,26 @@ class LoginRequest(BaseModel):
 
 class LoginResponse(BaseModel):
     token: str
+
+
+# ------------------------------- Guest Auth ---------------------------------
+
+class GuestLoginResponse(BaseModel):
+    token: str
+
+
+# Endpoint for anonymous users to obtain a short-lived session token that can be
+# used for guest-only operations (such as HTML-based video download).  This
+# mirrors the standard /login endpoint but skips credential verification and
+# does NOT attach a LearnUsClient instance to the session store.
+
+@app.post("/guest_login", response_model=GuestLoginResponse, summary="비회원 로그인")
+def guest_login():
+    token = uuid.uuid4().hex
+    # Store a sentinel (None) so that token validation can still succeed while
+    # allowing us to distinguish guest sessions from normal ones.
+    _SESSIONS[token] = None
+    return {"token": token}
 
 
 # -------------------------------- Utils ---------------------------------
@@ -312,6 +332,116 @@ def download_video(video_id: int, ext: str, client: LearnUsClient = Depends(get_
         headers["X-Stream-Duration"] = str(stream_duration)
     if stream_bitrate:
         headers["X-Stream-Bitrate"] = str(stream_bitrate)
+    media_type = "video/mp4" if ext == "mp4" else "audio/mpeg"
+    return StreamingResponse(iterfile(), media_type=media_type, headers=headers)
+
+
+# --------------------------- Guest download via HTML ---------------------------
+
+@app.post("/guest/download")
+async def guest_download(
+    ext: str = Query(..., regex="^(mp4|mp3)$", description="Download type: mp4 or mp3"),
+    file: UploadFile = File(..., description="HTML page containing .m3u8 URL"),
+    x_auth_token: Optional[str] = Header(None),
+):
+    """Accept an HTML file uploaded by a guest user, extract the first m3u8 URL and
+    convert/stream it as MP4 or MP3 to the client.
+
+    The caller must include the token obtained from /guest_login in the
+    X-Auth-Token header.  The session associated with that token must be a guest
+    session (i.e. value is None).
+    """
+
+    # Basic token validation (guest only)
+    if not x_auth_token or x_auth_token not in _SESSIONS:
+        raise HTTPException(status_code=401, detail="Invalid or missing token")
+    if _SESSIONS[x_auth_token] is not None:
+        raise HTTPException(status_code=400, detail="Not a guest session")
+
+    # Read uploaded HTML
+    try:
+        raw = await file.read()
+        html_text = raw.decode("utf-8", errors="ignore")
+    except Exception:
+        raise HTTPException(status_code=400, detail="파일을 읽는 중 오류가 발생했습니다.")
+
+    # Extract first .m3u8 URL
+    m = re.search(r"https?://[^'\"\s>]+\.m3u8", html_text)
+    if not m:
+        raise HTTPException(status_code=400, detail="HTML 내에서 m3u8 URL을 찾을 수 없습니다.")
+
+    m3u8_url = m.group(0)
+
+    # Determine title (fallback to uploaded filename)
+    title_match = re.search(r"<title>(.*?)</title>", html_text, flags=re.IGNORECASE | re.DOTALL)
+    title = title_match.group(1).strip() if title_match else file.filename.rsplit(".", 1)[0]
+
+    # Probe duration/bitrate using ffprobe if available (reuse logic above)
+    ffprobe_bin = os.getenv("FFPROBE_PATH") or shutil.which("ffprobe") or shutil.which("ffprobe.exe")
+    stream_duration: Optional[float] = None
+    stream_bitrate: Optional[int] = None
+    if ffprobe_bin:
+        try:
+            probe_cmd = [
+                ffprobe_bin,
+                "-v", "error",
+                "-show_entries", "format=duration,bit_rate",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                m3u8_url,
+            ]
+            result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                lines = [l.strip() for l in result.stdout.splitlines() if l.strip()]
+                if lines:
+                    try:
+                        stream_duration = float(lines[0])
+                    except ValueError:
+                        pass
+                    if len(lines) > 1:
+                        try:
+                            stream_bitrate = int(lines[1])
+                        except ValueError:
+                            pass
+        except Exception:
+            stream_duration = None
+            stream_bitrate = None
+
+    # ffmpeg command (same as /download)
+    ffmpeg_bin = os.getenv("FFMPEG_PATH") or shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
+    if not ffmpeg_bin:
+        raise HTTPException(status_code=500, detail="ffmpeg executable not found on server. Install ffmpeg and ensure it is in PATH.")
+
+    if ext == "mp4":
+        codec_args = "-c copy -bsf:a aac_adtstoasc -movflags frag_keyframe+empty_moov -f mp4"
+    else:
+        codec_args = "-vn -c:a libmp3lame -b:a 192k -f mp3"
+
+    cmd = f"{shlex.quote(ffmpeg_bin)} -loglevel error -y -i {shlex.quote(m3u8_url)} {codec_args} pipe:1"
+
+    process = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if process.stdout is None:
+        raise HTTPException(status_code=500, detail="Failed to initiate ffmpeg stream")
+
+    def iterfile():
+        try:
+            while True:
+                chunk = process.stdout.read(1024 * 1024)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            process.stdout.close()
+            process.kill()
+
+    filename = f"{title}.{ext}"
+    headers = {
+        "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"
+    }
+    if stream_duration:
+        headers["X-Stream-Duration"] = str(stream_duration)
+    if stream_bitrate:
+        headers["X-Stream-Bitrate"] = str(stream_bitrate)
+
     media_type = "video/mp4" if ext == "mp4" else "audio/mpeg"
     return StreamingResponse(iterfile(), media_type=media_type, headers=headers)
 

@@ -20,8 +20,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --primary-gradient-start: #4e54c8;
-      --primary-gradient-end: #8f94fb;
+      /* --primary-gradient-start: #4e54c8;
+      --primary-gradient-end: #8f94fb; */
+      --primary-gradient-start: #0093E9 ;
+      --primary-gradient-end: #80D0C7;
     }
 
     body {
@@ -179,10 +181,45 @@
       height: 6px;
       margin-top: 6px;
     }
+
+    /* --------------------------------------------------
+       Stylish gradient-outline Logout button
+       --------------------------------------------------*/
+    .logout-btn {
+      background: transparent;
+      border: 2px solid; /* needed for border-image to render */
+      border-image-slice: 1;
+      border-image-source: linear-gradient(90deg, var(--primary-gradient-start), var(--primary-gradient-end));
+      color: var(--primary-gradient-start);
+      font-weight: 600;
+      transition: all 0.25s ease;
+    }
+
+    .logout-btn:hover {
+      /* maintain same appearance; only cursor changes */
+      text-decoration: none;
+      box-shadow: none;
+    }
+
+    .logout-btn.disabled,
+    .logout-btn:disabled {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    /* Guest upload card (same look as login) */
+    #guest-section {
+      max-width: 600px;
+      margin: 0 auto 2rem;
+      background: #fff;
+      border-radius: 1rem;
+      padding: 2rem;
+      box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.1);
+    }
   </style>
 </head>
 <body class="py-4">
-  <h1 class="mb-4 d-flex justify-content-between align-items-center">LearnUs Downloader <button id="logoutBtn" class="btn btn-outline-secondary btn-sm d-none">Logout</button></h1>
+  <h1 class="mb-4 d-flex justify-content-between align-items-center">LearnUs Downloader <button id="logoutBtn" class="btn btn-sm logout-btn d-none"><i class="fa-solid fa-arrow-right-from-bracket me-1"></i>Logout</button></h1>
   <p id="subtitle" class="mb-4 text-muted">Developed by 차유진</p>
 
   <!-- Login form -->
@@ -191,8 +228,10 @@
     <div class="input-group mb-3"><span class="input-group-text"><i class="fa-solid fa-user"></i></span><input type="text" id="username" class="form-control" placeholder="Student ID" required /></div>
     <div class="input-group mb-3"><span class="input-group-text"><i class="fa-solid fa-lock"></i></span><input type="password" id="password" class="form-control" placeholder="Password" required /></div>
     <div class="col-12 form-check mb-2"><input class="form-check-input" type="checkbox" id="rememberMe"><label class="form-check-label" for="rememberMe">자동 로그인</label></div>
-    <div class="col-12"><button type="submit" class="btn btn-primary w-100">Login</button></div>
-    <div id="login-error" class="text-danger mt-3 text-center"></div>
+    <div class="col-12 mt-3"><button type="submit" class="btn btn-primary w-100">Login</button></div>
+    <!-- Guest login -->
+    <div class="col-12 mt-2"><button type="button" id="guestLoginBtn" class="btn btn-outline-secondary w-100">비회원 모드 (HTML 업로드)</button></div>
+    <div id="login-error" class="text-danger mt-2 text-center"></div>
   </form>
 
   <!-- Course selector (added) -->
@@ -214,6 +253,17 @@
   <!-- Loading overlay -->
   <div id="loading-overlay"><div class="text-center"><div class="spinner-border text-primary" role="status" style="width:4rem;height:4rem;"></div><p class="mt-3 fw-bold">로딩 중...</p></div></div>
 
+  <!-- Guest HTML upload / download -->
+  <!-- Placed right after login card for consistent flow -->
+  <div id="guest-section" class="d-none mb-4">
+    <h4 class="mb-3">HTML 업로드</h4>
+    <input type="file" id="htmlFile" accept=".html,.htm,text/html" class="form-control mb-3" />
+    <div class="d-flex gap-2">
+      <button id="guestMp4Btn" class="btn btn-outline-primary flex-fill">MP4 다운로드</button>
+      <button id="guestMp3Btn" class="btn btn-outline-secondary flex-fill">MP3 다운로드</button>
+    </div>
+  </div>
+
   <!-- Footer -->
   <footer id="footer">대기과학과 화이팅!<br /></footer>
 
@@ -226,6 +276,10 @@
     const courseSelect=document.getElementById('course-select');
     const videoSection=document.getElementById('video-section');
     const videoList=document.getElementById('video-list');
+    const guestSection=document.getElementById('guest-section');
+    const guestLoginBtn=document.getElementById('guestLoginBtn');
+    const guestMp4Btn=document.getElementById('guestMp4Btn');
+    const guestMp3Btn=document.getElementById('guestMp3Btn');
     let token=null;
 
     function showLoading(show){ loadingOverlay.style.visibility=show?'visible':'hidden'; }
@@ -428,7 +482,72 @@
       }
     }
 
-    logoutBtn.addEventListener('click',async()=>{ try{await api('/logout',{method:'POST'});}catch{} location.reload(); });
+    // Guest download routine using uploaded HTML file
+    async function guestDownload(ext, btn){
+      if(btn && btn.dataset.downloading==='1') return;
+      const fileInput=document.getElementById('htmlFile');
+      if(!fileInput.files.length){ alert('HTML 파일을 먼저 선택하세요.'); return; }
+
+      if(btn){ btn.dataset.downloading='1'; btn.classList.add('disabled'); var originalHTML=btn.innerHTML; btn.innerHTML='<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>'; }
+
+      const formData=new FormData(); formData.append('file', fileInput.files[0]);
+
+      try{
+        const res=await fetch(`/guest/download?ext=${ext}`, {method:'POST', headers:{'X-Auth-Token': token}, body: formData});
+
+        if(res.status===401) throw new Error('세션 만료: 다시 로그인해 주세요.');
+        if(!res.ok) throw new Error('다운로드 요청 실패');
+
+        const contentDisp=res.headers.get('Content-Disposition')||'';
+        let filename='download.'+ext;
+        const m=contentDisp.match(/filename\*=UTF-8''([^;]+)/);
+        if(m) filename=decodeURIComponent(m[1]);
+
+        const total=Number(res.headers.get('Content-Length'))||0;
+        const unknownTotal=!total;
+
+        const reader=res.body?.getReader();
+        const chunks=[]; let received=0;
+
+        while(true){ const {done,value}=await reader.read(); if(done) break; chunks.push(value); received+=value.length; }
+
+        const blob=new Blob(chunks,{type: ext==='mp4'?'video/mp4':'audio/mpeg'});
+        if(!blob.size) throw new Error('0바이트 파일이 수신되었습니다.');
+
+        const blobUrl=URL.createObjectURL(blob);
+        const a=document.createElement('a'); a.href=blobUrl; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);
+      }catch(err){ alert(err?.message||err||'알 수 없는 오류'); }
+      finally{
+        if(btn){ delete btn.dataset.downloading; btn.classList.remove('disabled'); btn.innerHTML=originalHTML; }
+      }
+    }
+
+    // Event bindings for guest logic
+    guestLoginBtn.addEventListener('click', async ()=>{
+      loginError.textContent='';
+      try{
+        const res=await fetch('/guest_login', {method:'POST'});
+        const data=await res.json();
+        token=data.token;
+        loginForm.classList.add('d-none');
+        logoutBtn.classList.remove('d-none');
+        guestSection.classList.remove('d-none');
+      }catch(err){ loginError.textContent=err.message||'Guest login failed'; }
+    });
+
+    guestMp4Btn.addEventListener('click', (e)=>{ e.preventDefault(); guestDownload('mp4', e.currentTarget); });
+    guestMp3Btn.addEventListener('click', (e)=>{ e.preventDefault(); guestDownload('mp3', e.currentTarget); });
+
+    logoutBtn.addEventListener('click', async () => {
+      try {
+        await fetch('/logout', { method: 'POST', headers: { 'X-Auth-Token': token } });
+      } catch {}
+      localStorage.removeItem('learnus_token');
+      localStorage.removeItem('learnus_id');
+      localStorage.removeItem('learnus_pw');
+      location.reload();
+    });
 
     // Auto-login if stored credentials
     window.addEventListener('load',async()=>{
