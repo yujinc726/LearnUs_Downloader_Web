@@ -347,17 +347,27 @@
 
         // Try to obtain total size for progress feedback
         const total = Number(res.headers.get('Content-Length')) || 0;
+        const durationSec = Number(res.headers.get('X-Stream-Duration')) || 0;
+        const startTime = performance.now();
+
+        let timeBasedUpdater;
+        if (!total && durationSec) {
+          // Fallback to time-based progress estimation
+          timeBasedUpdater = setInterval(() => {
+            const elapsed = (performance.now() - startTime) / 1000;
+            const pct = Math.min((elapsed / durationSec) * 100, 99); // cap at 99% — final set to 100 on finish
+            progressBar.style.width = pct.toFixed(1) + '%';
+          }, 500);
+        } else if (!total) {
+          // Unknown everything: show indeterminate
+          progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
+          progressBar.style.width = '100%';
+        }
 
         // Stream reader (supported browsers)
         const reader = res.body?.getReader();
         const chunks = [];
         let received = 0;
-
-        if (!total) {
-          // Unknown size: show animated full-length bar immediately
-          progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
-          progressBar.style.width = '100%';
-        }
 
         if (reader) {
           while (true) {
@@ -402,6 +412,7 @@
           delete btn.dataset.downloading;
           btn.classList.remove('disabled');
         }
+        if (timeBasedUpdater) clearInterval(timeBasedUpdater);
       }
     }
 

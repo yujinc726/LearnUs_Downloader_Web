@@ -241,6 +241,19 @@ def download_video(video_id: int, ext: str, client: LearnUsClient = Depends(get_
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    # Probe duration (in seconds) using ffprobe, if available
+    ffprobe_bin = os.getenv("FFPROBE_PATH") or shutil.which("ffprobe") or shutil.which("ffprobe.exe")
+    stream_duration: Optional[float] = None
+    if ffprobe_bin:
+        try:
+            probe_cmd = [ffprobe_bin, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", m3u8_url]
+            result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                stream_duration = float(result.stdout.strip())
+        except Exception:
+            # ignore probe errors
+            stream_duration = None
+
     # Prepare ffmpeg command
     ffmpeg_bin = os.getenv("FFMPEG_PATH") or shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
     if not ffmpeg_bin:
@@ -277,6 +290,8 @@ def download_video(video_id: int, ext: str, client: LearnUsClient = Depends(get_
     headers = {
         "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"
     }
+    if stream_duration:
+        headers["X-Stream-Duration"] = str(stream_duration)
     media_type = "video/mp4" if ext == "mp4" else "audio/mpeg"
     return StreamingResponse(iterfile(), media_type=media_type, headers=headers)
 
