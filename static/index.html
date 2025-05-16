@@ -351,8 +351,18 @@
         }
 
         // Try to obtain total size for progress feedback
-        const total = Number(res.headers.get('Content-Length')) || 0;
-        const unknownTotal = total === 0;
+        let total = Number(res.headers.get('Content-Length')) || 0;
+
+        // Fallback: if Content-Length is not provided, estimate it using duration * bitrate
+        if (!total) {
+          const durationSec = Number(res.headers.get('X-Stream-Duration')) || 0; // seconds
+          const bitrateBps = Number(res.headers.get('X-Stream-Bitrate')) || 0;   // bits per second
+          if (durationSec && bitrateBps) {
+            total = Math.floor((bitrateBps / 8) * durationSec); // convert bits to bytes
+          }
+        }
+
+        const unknownTotal = !total;
 
         // Stream reader (supported browsers)
         const reader = res.body?.getReader();

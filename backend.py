@@ -244,15 +244,33 @@ def download_video(video_id: int, ext: str, client: LearnUsClient = Depends(get_
     # Probe duration (in seconds) using ffprobe, if available
     ffprobe_bin = os.getenv("FFPROBE_PATH") or shutil.which("ffprobe") or shutil.which("ffprobe.exe")
     stream_duration: Optional[float] = None
+    stream_bitrate: Optional[int] = None  # bits per second
     if ffprobe_bin:
         try:
-            probe_cmd = [ffprobe_bin, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", m3u8_url]
+            probe_cmd = [
+                ffprobe_bin,
+                "-v", "error",
+                "-show_entries", "format=duration,bit_rate",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                m3u8_url,
+            ]
             result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
-                stream_duration = float(result.stdout.strip())
+                lines = [l.strip() for l in result.stdout.splitlines() if l.strip()]
+                if lines:
+                    try:
+                        stream_duration = float(lines[0])
+                    except ValueError:
+                        pass
+                    if len(lines) > 1:
+                        try:
+                            stream_bitrate = int(lines[1])  # bits/sec
+                        except ValueError:
+                            pass
         except Exception:
             # ignore probe errors
             stream_duration = None
+            stream_bitrate = None
 
     # Prepare ffmpeg command
     ffmpeg_bin = os.getenv("FFMPEG_PATH") or shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
@@ -292,6 +310,8 @@ def download_video(video_id: int, ext: str, client: LearnUsClient = Depends(get_
     }
     if stream_duration:
         headers["X-Stream-Duration"] = str(stream_duration)
+    if stream_bitrate:
+        headers["X-Stream-Bitrate"] = str(stream_bitrate)
     media_type = "video/mp4" if ext == "mp4" else "audio/mpeg"
     return StreamingResponse(iterfile(), media_type=media_type, headers=headers)
 
