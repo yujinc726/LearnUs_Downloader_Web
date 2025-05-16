@@ -247,7 +247,9 @@ def download_video(video_id: int, ext: str, client: LearnUsClient = Depends(get_
         raise HTTPException(status_code=500, detail="ffmpeg executable not found on server. Install ffmpeg and ensure it is in PATH.")
 
     if ext == "mp4":
-        codec_args = "-c copy -bsf:a aac_adtstoasc -movflags +faststart -f mp4"
+        # For streaming to a non-seekable pipe, use fragmented MP4 flags instead of +faststart
+        # faststart needs a seekable output to relocate the moov atom and fails, producing 0-byte files.
+        codec_args = "-c copy -bsf:a aac_adtstoasc -movflags frag_keyframe+empty_moov -f mp4"
     else:  # mp3
         codec_args = "-vn -c:a libmp3lame -b:a 192k -f mp3"
 
