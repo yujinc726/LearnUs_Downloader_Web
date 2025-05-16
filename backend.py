@@ -234,7 +234,7 @@ def download_video(video_id: int, ext: str, client: LearnUsClient = Depends(get_
     if ext not in {"mp4", "mp3"}:
         raise HTTPException(status_code=400, detail="Unsupported extension. Use mp4 or mp3.")
 
-    video_page_url = f"{client.BASE_URL}/mod/vod/view.php?id={video_id}"
+    video_page_url = f"{client.BASE_URL}/mod/vod/viewer.php?id={video_id}"
     try:
         title, m3u8_url = client.get_video_stream_info(video_page_url)
     except Exception as e:
