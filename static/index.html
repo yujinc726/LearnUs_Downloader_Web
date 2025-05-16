@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-VJM20CG19B"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-VJM20CG19B');
+  </script>
+  <title>LearnUs Alimi</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E📅%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.17/index.global.min.css" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --primary-gradient-start: #4e54c8;
+      --primary-gradient-end: #8f94fb;
+    }
+
+    body {
+      background: linear-gradient(135deg, #eef2ff 0%, #fafcff 100%);
+      font-family: 'Poppins', 'Noto Sans KR', sans-serif;
+    }
+
+    h1 {
+      font-weight: 700;
+      background: linear-gradient(90deg, var(--primary-gradient-start), var(--primary-gradient-end));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      max-width: 900px;
+      margin: 0 auto 1.5rem auto;
+      padding-left: 0.75rem; /* slight indent */
+    }
+
+    /* Login card */
+    #login-form {
+      max-width: 600px;
+      margin: 0 auto 2rem;
+      background: #fff;
+      border-radius: 1rem;
+      padding: 2rem;
+      box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.1);
+    }
+
+    /* Login form elements */
+    #login-form .input-group-text {
+      background: transparent;
+      border-right: 0;
+    }
+
+    #login-form .form-control {
+      border-left: 0;
+      box-shadow: none !important;
+    }
+
+    #login-form .btn-primary {
+      background: linear-gradient(90deg, var(--primary-gradient-start), var(--primary-gradient-end));
+      border: none;
+      font-weight: 600;
+    }
+
+    #login-form .btn-primary:hover {
+      opacity: 0.9;
+    }
+
+    /* Footer */
+    #footer {
+      position: fixed;
+      bottom: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.875rem;
+      color: #6c757d;
+      text-align: center;
+    }
+
+    /* Course selector & Video wrapper */
+    #course-section,
+    #video-section {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    #course-section {
+      background: #fff;
+      border-radius: 1rem;
+      padding: 1.5rem;
+      box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.05);
+    }
+
+    /* video list wrapper spacing */
+    #video-section {
+      padding: 0;
+    }
+
+    /* Todo lists styling */
+    #todo-section .col-12 {
+      margin-bottom: 3.5rem; /* increased gap */
+    }
+
+    #todo-section h4 {
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+    }
+
+    #todo-section ul.list-group {
+      border: 0;
+      border-radius: 0.75rem;
+      overflow: hidden;
+      box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.05);
+    }
+
+    /* Calendar card */
+    #calendar {
+      max-width: 900px;
+      margin: 10px auto 20px;
+      background: #fff;
+      border-radius: 1rem;
+      padding: 1rem;
+      box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.1);
+    }
+
+    #loading-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(255,255,255,0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1050;
+      visibility: hidden;
+    }
+
+    #subtitle {
+      max-width: 900px;
+      margin: -1rem auto 2rem auto; /* slight pull-up to close gap, then bottom space */
+      padding-left: 0.75rem;
+    }
+
+    /* List styling for video section matching original */
+    #video-section .col-12 {
+      margin-bottom: 3.5rem; /* same gap as before */
+    }
+
+    #video-section h4 {
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+    }
+
+    #video-section ul.list-group {
+      border: 0;
+      border-radius: 0.75rem;
+      overflow: hidden;
+      box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.05);
+    }
+
+    /* Download button subtle style */
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+  </style>
+</head>
+<body class="py-4">
+  <h1 class="mb-4 d-flex justify-content-between align-items-center">LearnUs Alimi <button id="logoutBtn" class="btn btn-outline-secondary btn-sm d-none">Logout</button></h1>
+  <p id="subtitle" class="mb-4 text-muted">Developed by 차유진</p>
+
+  <!-- Login form -->
+  <form id="login-form" class="mb-4">
+    <h4 class="mb-3">LearnUs Login</h4>
+    <div class="input-group mb-3"><span class="input-group-text"><i class="fa-solid fa-user"></i></span><input type="text" id="username" class="form-control" placeholder="Student ID" required /></div>
+    <div class="input-group mb-3"><span class="input-group-text"><i class="fa-solid fa-lock"></i></span><input type="password" id="password" class="form-control" placeholder="Password" required /></div>
+    <div class="col-12 form-check mb-2"><input class="form-check-input" type="checkbox" id="rememberMe"><label class="form-check-label" for="rememberMe">자동 로그인</label></div>
+    <div class="col-12"><button type="submit" class="btn btn-primary w-100">Login</button></div>
+    <div id="login-error" class="text-danger mt-3 text-center"></div>
+  </form>
+
+  <!-- Course selector (added) -->
+  <div id="course-section" class="d-none mb-4" style="max-width:600px;margin:0 auto;">
+    <h4 class="mb-2">과목 선택</h4>
+    <select id="course-select" class="form-select"></select>
+  </div>
+
+  <!-- Todo Lists -->
+  <div id="video-section" class="d-none row g-4 mt-3">
+    <div class="col-12 mb-3">
+      <h4>강의 동영상 목록</h4>
+      <ul id="video-list" class="list-group"></ul>
+    </div>
+  </div>
+
+  <!-- Loading overlay -->
+  <div id="loading-overlay"><div class="text-center"><div class="spinner-border text-primary" role="status" style="width:4rem;height:4rem;"></div><p class="mt-3 fw-bold">로딩 중...</p></div></div>
+
+  <!-- Footer -->
+  <footer id="footer">대기과학과 화이팅!<br /></footer>
+
+  <script>
+    const loginForm=document.getElementById('login-form');
+    const loginError=document.getElementById('login-error');
+    const loadingOverlay=document.getElementById('loading-overlay');
+    const logoutBtn=document.getElementById('logoutBtn');
+    const courseSection=document.getElementById('course-section');
+    const courseSelect=document.getElementById('course-select');
+    const videoSection=document.getElementById('video-section');
+    const videoList=document.getElementById('video-list');
+    let token=null;
+
+    function showLoading(show){ loadingOverlay.style.visibility=show?'visible':'hidden'; }
+    async function api(path,opts={}){
+      showLoading(true);
+      opts.headers=opts.headers||{};
+      if(token) opts.headers['X-Auth-Token']=token;
+      const res=await fetch(path,opts);
+      showLoading(false);
+      if(!res.ok){ let msg='요청 실패'; try{const j=await res.json(); msg=j.detail||msg;}catch{} throw new Error(msg);} return res;
+    }
+
+    loginForm.addEventListener('submit',async e=>{
+      e.preventDefault(); loginError.textContent='';
+      try{
+        const res=await api('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:username.value.trim(),password:password.value})});
+        token=(await res.json()).token;
+        loginForm.classList.add('d-none');
+        logoutBtn.classList.remove('d-none');
+        await loadCourses();
+      }catch(err){ loginError.textContent=err.message||'Login failed'; }
+    });
+
+    async function loadCourses(){
+      const courses=await (await api('/courses')).json();
+      courseSelect.innerHTML='';
+      courses.forEach(c=>{ const o=document.createElement('option'); o.value=c.id; o.textContent=c.name; courseSelect.appendChild(o); });
+      if(courses.length){ courseSection.classList.remove('d-none'); loadVideos(courses[0].id); }
+    }
+
+    courseSelect.addEventListener('change',()=> loadVideos(courseSelect.value));
+
+    async function loadVideos(courseId){
+      const {videos}=await (await api(`/videos?course_id=${courseId}`)).json();
+      renderVideos(videos);
+    }
+
+    function renderVideos(videos){
+      videoList.innerHTML = videos.length ? '' : '<li class="list-group-item">동영상이 없습니다.</li>';
+      videos.forEach(v=>{
+        const li=document.createElement('li');
+        li.className='list-group-item d-flex justify-content-between align-items-center flex-wrap';
+        const titleSpan=document.createElement('span'); titleSpan.textContent=v.title; li.appendChild(titleSpan);
+        const btnGroup=document.createElement('div'); btnGroup.className='btn-group btn-group-sm';
+        const mp4Btn=document.createElement('button'); mp4Btn.className='btn btn-outline-primary btn-sm download-btn'; mp4Btn.innerHTML='<i class="fa-solid fa-download"></i> MP4'; mp4Btn.addEventListener('click',()=>download(v.id,'mp4',v.title));
+        const mp3Btn=document.createElement('button'); mp3Btn.className='btn btn-outline-secondary btn-sm download-btn'; mp3Btn.innerHTML='<i class="fa-solid fa-music"></i> MP3'; mp3Btn.addEventListener('click',()=>download(v.id,'mp3',v.title));
+        btnGroup.appendChild(mp4Btn); btnGroup.appendChild(mp3Btn);
+        li.appendChild(btnGroup);
+        videoList.appendChild(li);
+      });
+      videoSection.classList.remove('d-none');
+    }
+
+    async function download(id,ext,title){
+      try{
+        showLoading(true);
+        const blob=await (await api(`/download/${id}.${ext}`)).blob();
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a'); a.href=url; a.download=`${title}.${ext}`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      }catch(err){ alert(err.message); } finally{ showLoading(false); }
+    }
+
+    logoutBtn.addEventListener('click',async()=>{ try{await api('/logout',{method:'POST'});}catch{} location.reload(); });
+
+    // Auto-login if stored credentials
+    window.addEventListener('load',async()=>{
+      const storedToken=localStorage.getItem('learnus_token');
+      if(storedToken){ token=storedToken; try{ await api('/ping'); loginForm.classList.add('d-none'); logoutBtn.classList.remove('d-none'); await loadCourses(); return; }catch{ token=null; }}
+    });
+  </script>
+</body>
+</html> 
