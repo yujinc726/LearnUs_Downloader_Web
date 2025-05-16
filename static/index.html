@@ -323,9 +323,14 @@
       // Create progress bar UI
       const progressWrapper = document.createElement('div');
       progressWrapper.className = 'progress video-progress';
+
       const progressBar = document.createElement('div');
       progressBar.className = 'progress-bar';
+      progressBar.setAttribute('role', 'progressbar');
       progressBar.style.width = '0%';
+      progressBar.style.transition = 'width 0.2s ease';
+      progressBar.textContent = '0%';
+
       progressWrapper.appendChild(progressBar);
       li.appendChild(progressWrapper);
 
@@ -347,27 +352,19 @@
 
         // Try to obtain total size for progress feedback
         const total = Number(res.headers.get('Content-Length')) || 0;
-        const durationSec = Number(res.headers.get('X-Stream-Duration')) || 0;
-        const startTime = performance.now();
-
-        let timeBasedUpdater;
-        if (!total && durationSec) {
-          // Fallback to time-based progress estimation
-          timeBasedUpdater = setInterval(() => {
-            const elapsed = (performance.now() - startTime) / 1000;
-            const pct = Math.min((elapsed / durationSec) * 100, 99); // cap at 99% — final set to 100 on finish
-            progressBar.style.width = pct.toFixed(1) + '%';
-          }, 500);
-        } else if (!total) {
-          // Unknown everything: show indeterminate
-          progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
-          progressBar.style.width = '100%';
-        }
+        const unknownTotal = total === 0;
 
         // Stream reader (supported browsers)
         const reader = res.body?.getReader();
         const chunks = [];
         let received = 0;
+
+        if (unknownTotal) {
+          // Indeterminate progress: show animated striped bar
+          progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
+          progressBar.style.width = '100%';
+          progressBar.textContent = '';
+        }
 
         if (reader) {
           while (true) {
@@ -376,9 +373,10 @@
             chunks.push(value);
             received += value.length;
 
-            if (total) {
-              const pct = ((received / total) * 100).toFixed(1);
+            if (!unknownTotal) {
+              const pct = Math.floor((received / total) * 100);
               progressBar.style.width = `${pct}%`;
+              progressBar.textContent = `${pct}%`;
             }
           }
         } else {
@@ -393,6 +391,11 @@
         if (!blob.size) {
           throw new Error('0바이트 파일이 수신되었습니다.');
         }
+
+        // Mark completion visually
+        progressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+        progressBar.style.width = '100%';
+        progressBar.textContent = '완료';
 
         // Trigger file save (single click)
         const blobUrl = URL.createObjectURL(blob);
@@ -412,7 +415,6 @@
           delete btn.dataset.downloading;
           btn.classList.remove('disabled');
         }
-        if (timeBasedUpdater) clearInterval(timeBasedUpdater);
       }
     }
 
