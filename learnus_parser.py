@@ -57,7 +57,9 @@ def parse_course_activities(html: str) -> List[Activity]:
     activities: list[Activity] = []
     seen_ids: set[int] = set()
 
-    for li in soup.select("li.activity"):
+    # Iterate in reverse to prefer activities appearing later (real week sections),
+    # skipping early duplicates from the "이번 주" shortcut section at the top.
+    for li in reversed(soup.select("li.activity")):
         classes = li.get("class", [])
         # Identify module ID
         module_id_str = li.get("id", "module-0").replace("module-", "")
@@ -123,7 +125,7 @@ def parse_course_activities(html: str) -> List[Activity]:
             )
         )
 
-    return activities
+    return list(reversed(activities))
 
 
 def parse_assignment_detail(html: str) -> dict:
