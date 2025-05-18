@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Dict, List, Optional, Tuple
 
-from fastapi import FastAPI, HTTPException, Depends, Header, status, UploadFile, File, Query
+from fastapi import FastAPI, HTTPException, Depends, Header, status, UploadFile, File, Query, BackgroundTasks
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -115,7 +115,7 @@ import pathlib
 
 # -------------------------------- New Video Endpoints --------------------------------
 
-import subprocess
+import subprocess, tempfile
 import shlex
 from urllib.parse import quote
 import shutil, os
@@ -189,26 +189,67 @@ def download_video(video_id: int, ext: str, client: LearnUsClient = Depends(get_
     if not ffmpeg_bin:
         raise HTTPException(status_code=500, detail="ffmpeg executable not found on server. Install ffmpeg and ensure it is in PATH.")
 
-    if ext == "mp4":
-        # For streaming to a non-seekable pipe, use fragmented MP4 flags instead of +faststart
-        # faststart needs a seekable output to relocate the moov atom and fails, producing 0-byte files.
-        codec_args = "-c copy -bsf:a aac_adtstoasc -movflags frag_keyframe+empty_moov -f mp4"
-    else:  # mp3
-        codec_args = "-vn -c:a libmp3lame -b:a 192k -f mp3"
+    filename = f"{title}.{ext}"
+    headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"}
+    if stream_duration:
+        headers["X-Stream-Duration"] = str(stream_duration)
+    if stream_bitrate:
+        headers["X-Stream-Bitrate"] = str(stream_bitrate)
 
+    if ext == "mp4":
+        # ------------------------------------------------------------------
+        # For MP4 we first remux into a temporary file so that ffmpeg can write
+        # a proper, self-contained MP4 (moov atom relocated with +faststart).
+        # Writing directly to a pipe is not possible because the MP4 muxer
+        # requires a seekable output when not using fragmented mode.
+        # ------------------------------------------------------------------
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+            tmp_path = tmp.name
+
+        remux_cmd = [
+            ffmpeg_bin,
+            "-loglevel", "error",
+            "-y",
+            "-i", m3u8_url,
+            "-c", "copy",
+            "-bsf:a", "aac_adtstoasc",
+            "-movflags", "+faststart",
+            tmp_path,
+        ]
+
+        result = subprocess.run(remux_cmd, capture_output=True)
+        if result.returncode != 0:
+            # Clean up temp file on error
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+            raise HTTPException(status_code=500, detail="ffmpeg failed to remux video")
+
+        # Use BackgroundTasks to delete the temporary file after the response is sent
+        def _cleanup():
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+
+        background_tasks = BackgroundTasks()
+        background_tasks.add_task(_cleanup)
+
+        return FileResponse(tmp_path, media_type="video/mp4", filename=filename, headers=headers, background=background_tasks)
+
+    # -------------------------------- MP3 (streaming) -------------------------------
+    codec_args = "-vn -c:a libmp3lame -b:a 192k -f mp3"
     cmd = f"{shlex.quote(ffmpeg_bin)} -loglevel error -y -i {shlex.quote(m3u8_url)} {codec_args} pipe:1"
 
-    # Spawn subprocess
     process = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
     if process.stdout is None:
         raise HTTPException(status_code=500, detail="Failed to initiate ffmpeg stream")
 
-    # Streaming generator
     def iterfile():
         try:
             while True:
-                chunk = process.stdout.read(1024 * 1024)  # 1MB
+                chunk = process.stdout.read(1024 * 1024)
                 if not chunk:
                     break
                 yield chunk
@@ -216,16 +257,7 @@ def download_video(video_id: int, ext: str, client: LearnUsClient = Depends(get_
             process.stdout.close()
             process.kill()
 
-    filename = f"{title}.{ext}"
-    headers = {
-        "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"
-    }
-    if stream_duration:
-        headers["X-Stream-Duration"] = str(stream_duration)
-    if stream_bitrate:
-        headers["X-Stream-Bitrate"] = str(stream_bitrate)
-    media_type = "video/mp4" if ext == "mp4" else "audio/mpeg"
-    return StreamingResponse(iterfile(), media_type=media_type, headers=headers)
+    return StreamingResponse(iterfile(), media_type="audio/mpeg", headers=headers)
 
 
 # --------------------------- Guest download via HTML ---------------------------
@@ -318,11 +350,48 @@ async def guest_download(
     if not ffmpeg_bin:
         raise HTTPException(status_code=500, detail="ffmpeg executable not found on server. Install ffmpeg and ensure it is in PATH.")
 
-    if ext == "mp4":
-        codec_args = "-c copy -bsf:a aac_adtstoasc -movflags frag_keyframe+empty_moov -f mp4"
-    else:
-        codec_args = "-vn -c:a libmp3lame -b:a 192k -f mp3"
+    filename = f"{title}.{ext}"
+    headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"}
+    if stream_duration:
+        headers["X-Stream-Duration"] = str(stream_duration)
+    if stream_bitrate:
+        headers["X-Stream-Bitrate"] = str(stream_bitrate)
 
+    if ext == "mp4":
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+            tmp_path = tmp.name
+
+        remux_cmd = [
+            ffmpeg_bin,
+            "-loglevel", "error",
+            "-y",
+            "-i", m3u8_url,
+            "-c", "copy",
+            "-bsf:a", "aac_adtstoasc",
+            "-movflags", "+faststart",
+            tmp_path,
+        ]
+
+        result = subprocess.run(remux_cmd, capture_output=True)
+        if result.returncode != 0:
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+            raise HTTPException(status_code=500, detail="ffmpeg failed to remux video")
+
+        def _cleanup():
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+
+        background_tasks = BackgroundTasks()
+        background_tasks.add_task(_cleanup)
+
+        return FileResponse(tmp_path, media_type="video/mp4", filename=filename, headers=headers, background=background_tasks)
+
+    codec_args = "-vn -c:a libmp3lame -b:a 192k -f mp3"
     cmd = f"{shlex.quote(ffmpeg_bin)} -loglevel error -y -i {shlex.quote(m3u8_url)} {codec_args} pipe:1"
 
     process = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -340,17 +409,7 @@ async def guest_download(
             process.stdout.close()
             process.kill()
 
-    filename = f"{title}.{ext}"
-    headers = {
-        "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"
-    }
-    if stream_duration:
-        headers["X-Stream-Duration"] = str(stream_duration)
-    if stream_bitrate:
-        headers["X-Stream-Bitrate"] = str(stream_bitrate)
-
-    media_type = "video/mp4" if ext == "mp4" else "audio/mpeg"
-    return StreamingResponse(iterfile(), media_type=media_type, headers=headers)
+    return StreamingResponse(iterfile(), media_type="audio/mpeg", headers=headers)
 
 
 # ----------------------------- Static mount (last) -----------------------------
