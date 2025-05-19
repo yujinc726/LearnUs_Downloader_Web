@@ -131,6 +131,7 @@ def list_videos(course_id: int, client: LearnUsClient = Depends(get_client)):
             "completed": a.completed,
             "open": a.open_time.isoformat() if a.open_time else None,
             "due": a.due_time.isoformat() if a.due_time else None,
+            "available": a.extra.get("playable", True),
         }
         for a in activities
         if a.type == "vod"

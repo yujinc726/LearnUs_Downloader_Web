@@ -331,18 +331,28 @@
         const mp4Btn=document.createElement('button');
         mp4Btn.className='btn btn-outline-primary btn-sm download-btn';
         mp4Btn.innerHTML='<i class="fa-solid fa-download"></i> MP4';
-        mp4Btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          download(v.id, 'mp4', v.title, li, e.currentTarget);
-        });
+        if (v.available !== false) {
+          mp4Btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            download(v.id, 'mp4', v.title, li, e.currentTarget);
+          });
+        } else {
+          mp4Btn.disabled = true;
+          mp4Btn.classList.add('disabled');
+        }
 
         const mp3Btn=document.createElement('button');
         mp3Btn.className='btn btn-outline-secondary btn-sm download-btn';
         mp3Btn.innerHTML='<i class="fa-solid fa-music"></i> MP3';
-        mp3Btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          download(v.id, 'mp3', v.title, li, e.currentTarget);
-        });
+        if (v.available !== false) {
+          mp3Btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            download(v.id, 'mp3', v.title, li, e.currentTarget);
+          });
+        } else {
+          mp3Btn.disabled = true;
+          mp3Btn.classList.add('disabled');
+        }
         btnGroup.appendChild(mp4Btn); btnGroup.appendChild(mp3Btn);
         li.appendChild(btnGroup);
         videoList.appendChild(li);

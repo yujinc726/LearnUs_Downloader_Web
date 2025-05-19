@@ -113,6 +113,16 @@ def parse_course_activities(html: str) -> List[Activity]:
             if late_m:
                 late_due_time = _parse_datetime(late_m.group(1))
 
+        # -------------------------------------------------------------
+        # Availability: For VOD items, LearnUs renders an <a> tag with
+        # an onclick="window.open(...)" when the video is still
+        # viewable.  Once the viewing window is over, that anchor is
+        # replaced by a <div class="dimmed dimmed_text"> and thus the
+        # <a> tag is missing.  We use presence of the anchor as a
+        # heuristic for whether the video is still playable.
+        # -------------------------------------------------------------
+        playable = bool(li.select_one("div.activityinstance a"))
+
         activities.append(
             Activity(
                 id=module_id,
@@ -122,6 +132,7 @@ def parse_course_activities(html: str) -> List[Activity]:
                 open_time=open_time,
                 due_time=due_time,
                 late_due_time=late_due_time,
+                extra={"playable": playable},
             )
         )
 
